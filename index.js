@@ -1,5 +1,6 @@
 
 
+
 (() => {
     // --- DOM Elements ---
     const DOMElements = {
@@ -13,6 +14,7 @@
             apiKey: document.getElementById('modal-api-key'),
             correction: document.getElementById('modal-correction'),
             error: document.getElementById('modal-error'),
+            confirmation: document.getElementById('modal-confirmation'),
         },
         apiKeyInput: document.getElementById('api-key-input'),
         saveApiKeyBtn: document.getElementById('save-api-key-btn'),
@@ -20,10 +22,16 @@
         closeCorrectionModalBtn: document.getElementById('close-correction-modal-btn'),
         errorMessage: document.getElementById('error-message'),
         closeErrorModalBtn: document.getElementById('close-error-modal-btn'),
+        confirmationTitle: document.getElementById('confirmation-title'),
+        confirmationMessage: document.getElementById('confirmation-message'),
+        confirmationCancelBtn: document.getElementById('confirmation-cancel-btn'),
+        confirmationConfirmBtn: document.getElementById('confirmation-confirm-btn'),
         wordTooltip: document.getElementById('word-tooltip'),
         importBtn: document.getElementById('import-btn'),
         importInput: document.getElementById('import-input'),
         exportBtn: document.getElementById('export-btn'),
+        toastNotification: document.getElementById('toast-notification'),
+        toastMessage: document.getElementById('toast-message'),
     };
 
     // --- State Management ---
@@ -35,6 +43,8 @@
         isLoading: false,
         activeTooltipTarget: null,
     };
+    
+    let confirmAction = () => {};
 
     const saveState = () => {
         try {
@@ -77,6 +87,16 @@
         }
     };
 
+    let toastTimeout;
+    const showToast = (message) => {
+        clearTimeout(toastTimeout);
+        DOMElements.toastMessage.textContent = message;
+        DOMElements.toastNotification.classList.add('show');
+        toastTimeout = setTimeout(() => {
+            DOMElements.toastNotification.classList.remove('show');
+        }, 3000);
+    };
+
     const showError = (message, details = null) => {
         DOMElements.errorMessage.textContent = message;
 
@@ -95,6 +115,19 @@
             detailsContainer.classList.add('hidden');
         }
         showModal('error', true);
+    };
+
+    const showConfirmation = (message, onConfirm, title = 'Confirm Action', confirmText = 'Confirm') => {
+        DOMElements.confirmationTitle.textContent = title;
+        DOMElements.confirmationMessage.textContent = message;
+        DOMElements.confirmationConfirmBtn.textContent = confirmText;
+        
+        confirmAction = () => {
+            onConfirm();
+            showModal('confirmation', false);
+            confirmAction = () => {}; // Reset after use
+        };
+        showModal('confirmation', true);
     };
 
     // --- Template Loader ---
@@ -152,17 +185,6 @@
             });
             return result.candidates[0].content.parts[0].text;
         },
-        
-        generateAvatar: async (prompt) => {
-             const fullPrompt = `Generate a high-quality, anime-style portrait of a character based on this description: "${prompt}". The background should be simple. The image should be clean and suitable for an avatar.`;
-             const result = await geminiService._fetch('gemini-2.5-flash-image-preview', {
-                 contents: { role: "user", parts: [{ text: fullPrompt }] }
-             });
-
-             const imagePart = result.candidates[0].content.parts.find(part => part.inlineData);
-             if (!imagePart) throw { message: "Image data not found in response.", details: result };
-             return imagePart.inlineData.data; // Base64 encoded image
-        },
 
         getChatResponse: async (character, chatHistory) => {
             const systemPrompt = `You are an AI Japanese language practice partner.
@@ -189,7 +211,8 @@ JSON Structure:
 - The "meaning" is the MOST IMPORTANT part. It MUST be a two-sentence explanation of the word.
 - This explanation must be INCREDIBLY simple. Use ONLY vocabulary and grammar that a 3-year-old Japanese child could easily understand.
 - AVOID ALL difficult words in the explanation. If a word is even slightly complex, find a simpler way to say it. The goal is to explain the core concept in a playful, childish way, NOT to provide a dictionary definition or a synonym.
-- CRITICAL RULE: NEVER include bracketed furigana readings (like "漢字(かんじ)") in ANY of your text outputs. All text in the "feedback", "correctedText", and "meaning" fields must be natural, simple Japanese without inline readings.
+- CRITICAL RULE 1: Under NO circumstances should you EVER include bracketed furigana readings (like "漢字(かんじ)") in ANY of your text outputs. This is a strict formatting requirement. The \`reading\` field in the JSON is the ONLY place for furigana.
+- CRITICAL RULE 2: All text in the "feedback", "correctedText", and "meaning" fields must be natural, simple Japanese. Do NOT use bracketed readings here. It is forbidden. Repeat: NEVER use bracketed readings like "言葉(ことば)".
 
 Example for the value of the "words" array in a response:
 [{"word":"今日","reading":"きょう","meaning":"いまいる、この日だよ。昨日じゃなくて、明日でもない、太陽がのぼってからしずむまでの時間のこと！"},{"word":"は","reading":null,"meaning":null},{"word":"天気","reading":"てんき","meaning":"お空のきげんのことだよ。晴れてにこにこしてる時もあれば、雨でめそめそ泣いちゃう時もあるんだ。"},{"word":"が","reading":null,"meaning":null},{"word":"良い","reading":"よい","meaning":"すてきってこと！わるいことの反対で、みんながにこにこしちゃうような感じ。"},{"word":"です。","reading":null,"meaning":null}]`;
@@ -290,7 +313,6 @@ Example for the value of the "words" array in a response:
 
         // Event Listeners
         document.getElementById('generate-desc-btn').addEventListener('click', handleGenerateDescription);
-        document.getElementById('generate-avatar-btn').addEventListener('click', handleGenerateAvatar);
         document.getElementById('upload-avatar-btn').addEventListener('click', () => document.getElementById('avatar-file-input').click());
         document.getElementById('avatar-file-input').addEventListener('change', handleAvatarUpload);
         document.getElementById('save-character-btn').addEventListener('click', handleSaveCharacter);
@@ -331,7 +353,8 @@ Example for the value of the "words" array in a response:
             
             let contentHtml = '';
             if (msg.words) {
-                contentHtml += `<p class="whitespace-pre-wrap">${msg.words.map(w => w.reading ? `<span class="has-tooltip relative cursor-pointer border-b-2 border-amber-400" data-word="${w.word}" data-reading="${w.reading}" data-meaning="${w.meaning}">${w.word}</span>` : `<span>${w.word}</span>`).join('')}</p>`;
+                // For AI messages: make text unselectable, but allow highlighted words to be selected
+                contentHtml += `<p class="whitespace-pre-wrap select-none">${msg.words.map(w => w.reading ? `<span class="has-tooltip relative cursor-pointer border-b-2 border-amber-400 select-text" data-word="${w.word}" data-reading="${w.reading}" data-meaning="${w.meaning}">${w.word}</span>` : `<span>${w.word}</span>`).join('')}</p>`;
             } else if (msg.text) {
                 contentHtml += `<p class="whitespace-pre-wrap">${msg.text}</p>`;
             }
@@ -341,9 +364,14 @@ Example for the value of the "words" array in a response:
                     ${!isUser ? `<img src="${char.avatarUrl}" class="w-8 h-8 rounded-full object-cover mr-3 self-start">` : ''}
                     
                     ${isUser ? `
-                        <button class="mr-2 p-1 text-slate-400 hover:text-red-500 transition delete-message-btn opacity-0 group-hover:opacity-100" data-message-id="${msg.id}" title="Delete Message">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                        </button>
+                        <div class="flex items-center self-center mr-2">
+                            <button class="p-2 text-slate-400 hover:text-blue-500 transition copy-message-btn opacity-0 group-hover:opacity-100" data-message-id="${msg.id}" title="Copy Message">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            </button>
+                            <button class="p-2 text-slate-400 hover:text-red-500 transition delete-message-btn opacity-0 group-hover:opacity-100" data-message-id="${msg.id}" title="Delete Message">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
+                        </div>
                     ` : ''}
 
                     <div class="max-w-md">
@@ -358,9 +386,14 @@ Example for the value of the "words" array in a response:
                         : ''}
                     </div>
                      ${!isUser ? `
-                        <button class="ml-2 p-1 text-slate-400 hover:text-red-500 transition delete-message-btn opacity-0 group-hover:opacity-100" data-message-id="${msg.id}" title="Delete Message">
-                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                        </button>
+                        <div class="flex items-center self-center ml-2">
+                            <button class="p-2 text-slate-400 hover:text-blue-500 transition copy-message-btn opacity-0 group-hover:opacity-100" data-message-id="${msg.id}" title="Copy Message">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            </button>
+                            <button class="p-2 text-slate-400 hover:text-red-500 transition delete-message-btn opacity-0 group-hover:opacity-100" data-message-id="${msg.id}" title="Delete Message">
+                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
+                        </div>
                     ` : ''}
                 </div>
             `;
@@ -374,6 +407,9 @@ Example for the value of the "words" array in a response:
         });
         messagesContainer.querySelectorAll('.delete-message-btn').forEach(btn => {
             btn.addEventListener('click', () => handleDeleteMessage(btn.dataset.messageId));
+        });
+        messagesContainer.querySelectorAll('.copy-message-btn').forEach(btn => {
+            btn.addEventListener('click', () => handleCopyMessage(btn.dataset.messageId));
         });
         messagesContainer.querySelectorAll('.has-tooltip').forEach(el => {
             el.addEventListener('click', handleWordClick);
@@ -395,14 +431,19 @@ Example for the value of the "words" array in a response:
     };
 
     const handleDeleteCharacter = (id) => {
-        if (confirm('Are you sure you want to delete this friend? This cannot be undone.')) {
-            state.characters = state.characters.filter(c => c.id !== id);
-            if (state.selectedCharacterId === id) {
-                state.selectedCharacterId = null;
-            }
-            saveState();
-            renderCharacterList();
-        }
+        showConfirmation(
+            'Are you sure you want to delete this friend? This action cannot be undone.',
+            () => {
+                state.characters = state.characters.filter(c => c.id !== id);
+                if (state.selectedCharacterId === id) {
+                    state.selectedCharacterId = null;
+                }
+                saveState();
+                renderCharacterList();
+            },
+            'Delete Friend',
+            'Delete'
+        );
     };
 
     const handleSelectCharacter = (id) => {
@@ -462,18 +503,6 @@ Example for the value of the "words" array in a response:
         withLoader('generate-desc-btn', async () => {
             const desc = await geminiService.generateCharacterDescription(prompt);
             document.getElementById('char-creator-desc-prompt').value = desc;
-        });
-    };
-
-    const handleGenerateAvatar = () => {
-        const prompt = document.getElementById('char-creator-avatar-prompt').value;
-        if (!prompt) {
-            showError("Please enter a visual prompt for the avatar.");
-            return;
-        }
-        withLoader('generate-avatar-btn', async () => {
-            const base64Img = await geminiService.generateAvatar(prompt);
-            document.getElementById('char-creator-avatar-preview').src = `data:image/jpeg;base64,${base64Img}`;
         });
     };
     
@@ -589,18 +618,49 @@ Example for the value of the "words" array in a response:
         });
     };
 
+    const handleCopyMessage = (messageId) => {
+        const btn = document.querySelector(`.copy-message-btn[data-message-id="${messageId}"]`);
+        if (!btn) return;
+
+        const char = state.characters.find(c => c.id === state.selectedCharacterId);
+        if (!char) return;
+        const msg = char.chatHistory.find(m => m.id === messageId);
+        if (!msg || !msg.text) return;
+
+        navigator.clipboard.writeText(msg.text).then(() => {
+            showToast("Text copied!");
+            const originalIcon = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
+            setTimeout(() => {
+                btn.innerHTML = originalIcon;
+                btn.disabled = false;
+            }, 1500);
+        }).catch(err => {
+            console.error('Failed to copy message: ', err);
+            showError('Failed to copy message to clipboard.');
+        });
+    };
+
     const handleDeleteMessage = (messageId) => {
-        const charIndex = state.characters.findIndex(c => c.id === state.selectedCharacterId);
-        if (charIndex === -1) return;
+        showConfirmation(
+            'Are you sure you want to delete this message?',
+            () => {
+                const charIndex = state.characters.findIndex(c => c.id === state.selectedCharacterId);
+                if (charIndex === -1) return;
 
-        const character = state.characters[charIndex];
-        const initialLength = character.chatHistory.length;
-        character.chatHistory = character.chatHistory.filter(msg => msg.id !== messageId);
+                const character = state.characters[charIndex];
+                const initialLength = character.chatHistory.length;
+                character.chatHistory = character.chatHistory.filter(msg => msg.id !== messageId);
 
-        if (character.chatHistory.length < initialLength) {
-            saveState();
-            renderMessages();
-        }
+                if (character.chatHistory.length < initialLength) {
+                    saveState();
+                    renderMessages();
+                }
+            },
+            'Delete Message',
+            'Delete'
+        );
     };
 
     const handleOpenCorrection = (messageId) => {
@@ -655,7 +715,7 @@ Example for the value of the "words" array in a response:
                 <div class="text-center">
                     <div class="font-bold text-3xl">${target.dataset.word}</div>
                     <div class="text-xl text-amber-500 mb-2">${target.dataset.reading}</div>
-                    <div class="text-2xl text-slate-600">${target.dataset.meaning.replace(/\\n/g, '<br>')}</div>
+                    <div class="text-xl text-slate-600">${target.dataset.meaning.replace(/\\n/g, '<br>')}</div>
                 </div>
             `;
             
@@ -664,7 +724,21 @@ Example for the value of the "words" array in a response:
             tooltip.style.top = `${rect.top}px`;
             tooltip.style.transform = 'translate(-50%, -100%) translateY(-8px)';
             
+            // Make it visible to measure its dimensions
             tooltip.classList.remove('hidden');
+            
+            // Now check boundaries and adjust if necessary
+            const tooltipRect = tooltip.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const margin = 8;
+
+            if (tooltipRect.left < margin) {
+                // It's off the left edge. Adjust the 'left' style to bring it into view.
+                tooltip.style.left = `${margin + tooltipRect.width / 2}px`;
+            } else if (tooltipRect.right > viewportWidth - margin) {
+                // It's off the right edge.
+                tooltip.style.left = `${viewportWidth - margin - tooltipRect.width / 2}px`;
+            }
         }
     };
 
@@ -719,6 +793,13 @@ Example for the value of the "words" array in a response:
         });
         DOMElements.closeCorrectionModalBtn.addEventListener('click', () => showModal('correction', false));
         DOMElements.closeErrorModalBtn.addEventListener('click', () => showModal('error', false));
+        
+        DOMElements.confirmationConfirmBtn.addEventListener('click', () => confirmAction());
+        DOMElements.confirmationCancelBtn.addEventListener('click', () => {
+            confirmAction = () => {}; // Clear action
+            showModal('confirmation', false);
+        });
+
         DOMElements.importBtn.addEventListener('click', () => DOMElements.importInput.click());
         DOMElements.importInput.addEventListener('change', handleImport);
         DOMElements.exportBtn.addEventListener('click', handleExport);
