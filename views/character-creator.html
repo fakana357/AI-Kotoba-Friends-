@@ -1,0 +1,43 @@
+
+<div class="p-6 flex flex-col h-full">
+    <h2 id="creator-title" class="text-2xl font-bold mb-4">Create a New Friend</h2>
+    <div class="flex-grow overflow-y-auto pr-2 space-y-6">
+        <div>
+            <label class="font-bold text-slate-700 block mb-1">Name</label>
+            <input id="char-creator-name" type="text" placeholder="e.g., Yuki" class="w-full p-2 border border-slate-300 rounded-md bg-white">
+        </div>
+        <div>
+            <label class="font-bold text-slate-700 block mb-1">Personality Prompt</label>
+            <textarea id="char-creator-desc-prompt" rows="3" placeholder="A friendly and energetic girl from Osaka who loves takoyaki and telling jokes." class="w-full p-2 border border-slate-300 rounded-md bg-white"></textarea>
+            <button id="generate-desc-btn" class="mt-2 text-sm bg-amber-500 text-white font-bold py-1.5 px-3 rounded-md hover:bg-amber-600 transition flex items-center">
+                <span class="btn-text">Generate with AI</span>
+                <div class="btn-loader hidden w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            </button>
+        </div>
+        <div>
+            <label class="font-bold text-slate-700 block mb-1">Avatar</label>
+            <div class="flex items-center space-x-4">
+                <img id="char-creator-avatar-preview" src="https://picsum.photos/id/129/200/200" class="w-24 h-24 rounded-full object-cover border-4 border-slate-200">
+                <div class="flex-grow">
+                    <input id="char-creator-avatar-prompt" type="text" placeholder="Visual prompt (e.g., girl with silver hair, blue eyes)" class="w-full p-2 border border-slate-300 rounded-md mb-2 bg-white">
+                    <div class="flex items-center space-x-2">
+                        <button id="generate-avatar-btn" class="text-sm bg-amber-500 text-white font-bold py-1.5 px-3 rounded-md hover:bg-amber-600 transition flex items-center">
+                            <span class="btn-text">Generate with AI</span>
+                            <div class="btn-loader hidden w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        </button>
+                        <span class="text-slate-500">or</span>
+                        <button id="upload-avatar-btn" class="text-sm bg-slate-200 text-slate-700 font-bold py-1.5 px-3 rounded-md hover:bg-slate-300 transition">Upload Image</button>
+                        <input type="file" id="avatar-file-input" class="hidden" accept="image/*">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="flex justify-end space-x-3 mt-6 pt-4 border-t border-slate-200">
+        <button id="cancel-creator-btn" class="bg-slate-200 text-slate-700 font-bold py-2 px-4 rounded-md hover:bg-slate-300 transition">Cancel</button>
+        <button id="save-character-btn" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600 transition flex items-center">
+            <span class="btn-text">Create Friend</span>
+            <div class="btn-loader hidden w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+        </button>
+    </div>
+</div>
