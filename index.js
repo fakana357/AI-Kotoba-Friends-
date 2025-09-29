@@ -1,6 +1,5 @@
 
 
-
 (() => {
     // --- DOM Elements ---
     const DOMElements = {
@@ -34,6 +33,7 @@
         selectedCharacterId: null,
         editingCharacterId: null,
         isLoading: false,
+        activeTooltipTarget: null,
     };
 
     const saveState = () => {
@@ -174,7 +174,8 @@ Your Task:
 2. Analyze the user's LAST message for grammar.
 3. Create a SINGLE, natural, in-character response.
 4. For your response, you MUST highlight every word that contains one or more Kanji characters.
-5. You MUST format your entire output as a single, valid JSON object with NO other text before or after it.
+5. To create a line break for longer messages, you can include a "\\n" character inside the "word" value where appropriate.
+6. You MUST format your entire output as a single, valid JSON object with NO other text before or after it.
 
 JSON Structure:
 {
@@ -185,7 +186,9 @@ JSON Structure:
 - The "words" array MUST represent your entire response sentence, broken into logical word/particle units.
 - For words that DO NOT contain any Kanji (like hiragana, katakana, or punctuation), the "reading" and "meaning" fields MUST be null.
 - For ANY word that contains at least one Kanji, you MUST provide the "reading" (furigana) and a "meaning".
-- The "meaning" MUST be a two-sentence explanation in super simple, playful, almost childish Japanese. It must explain what the word really is, not just be a synonym.
+- The "meaning" is the MOST IMPORTANT part. It MUST be a two-sentence explanation of the word.
+- This explanation must be INCREDIBLY simple. Use ONLY vocabulary and grammar that a 3-year-old Japanese child could easily understand.
+- AVOID ALL difficult words in the explanation. If a word is even slightly complex, find a simpler way to say it. The goal is to explain the core concept in a playful, childish way, NOT to provide a dictionary definition or a synonym.
 - CRITICAL RULE: NEVER include bracketed furigana readings (like "漢字(かんじ)") in ANY of your text outputs. All text in the "feedback", "correctedText", and "meaning" fields must be natural, simple Japanese without inline readings.
 
 Example for the value of the "words" array in a response:
@@ -257,6 +260,7 @@ Example for the value of the "words" array in a response:
         
         // Add event listeners
         document.getElementById('add-character-btn').addEventListener('click', handleNewCharacter);
+        document.getElementById('settings-btn').addEventListener('click', handleOpenSettings);
         document.querySelectorAll('.character-item').forEach(el => el.addEventListener('click', (e) => {
             if (!e.target.closest('button')) {
                 handleSelectCharacter(el.dataset.id);
@@ -307,8 +311,13 @@ Example for the value of the "words" array in a response:
 
         // Event listeners
         document.getElementById('back-to-list-btn').addEventListener('click', handleBackToList);
-        document.getElementById('chat-input').addEventListener('keydown', handleChatInputKeydown);
         document.getElementById('send-message-btn').addEventListener('click', handleSendMessage);
+        
+        const chatInput = document.getElementById('chat-input');
+        chatInput.addEventListener('input', () => {
+            chatInput.style.height = 'auto';
+            chatInput.style.height = `${chatInput.scrollHeight}px`;
+        });
     };
     
     const renderMessages = () => {
@@ -322,14 +331,21 @@ Example for the value of the "words" array in a response:
             
             let contentHtml = '';
             if (msg.words) {
-                contentHtml += `<p>${msg.words.map(w => w.reading ? `<span class="has-tooltip relative cursor-pointer border-b-2 border-amber-400" data-word="${w.word}" data-reading="${w.reading}" data-meaning="${w.meaning}">${w.word}</span>` : `<span>${w.word}</span>`).join('')}</p>`;
+                contentHtml += `<p class="whitespace-pre-wrap">${msg.words.map(w => w.reading ? `<span class="has-tooltip relative cursor-pointer border-b-2 border-amber-400" data-word="${w.word}" data-reading="${w.reading}" data-meaning="${w.meaning}">${w.word}</span>` : `<span>${w.word}</span>`).join('')}</p>`;
             } else if (msg.text) {
-                contentHtml += `<p>${msg.text}</p>`;
+                contentHtml += `<p class="whitespace-pre-wrap">${msg.text}</p>`;
             }
 
             return `
                 <div class="flex items-end mb-4 group ${isUser ? 'justify-end' : ''}">
                     ${!isUser ? `<img src="${char.avatarUrl}" class="w-8 h-8 rounded-full object-cover mr-3 self-start">` : ''}
+                    
+                    ${isUser ? `
+                        <button class="mr-2 p-1 text-slate-400 hover:text-red-500 transition delete-message-btn opacity-0 group-hover:opacity-100" data-message-id="${msg.id}" title="Delete Message">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    ` : ''}
+
                     <div class="max-w-md">
                         <div class="px-4 py-2 rounded-lg ${bubbleClasses}">
                             ${contentHtml}
@@ -360,8 +376,7 @@ Example for the value of the "words" array in a response:
             btn.addEventListener('click', () => handleDeleteMessage(btn.dataset.messageId));
         });
         messagesContainer.querySelectorAll('.has-tooltip').forEach(el => {
-            el.addEventListener('mouseenter', handleWordTooltipShow);
-            el.addEventListener('mouseleave', handleWordTooltipHide);
+            el.addEventListener('click', handleWordClick);
         });
     };
 
@@ -400,6 +415,11 @@ Example for the value of the "words" array in a response:
         state.editingCharacterId = null;
         renderCharacterList();
         showView('characterList');
+    };
+
+    const handleOpenSettings = () => {
+        DOMElements.apiKeyInput.value = state.apiKey || '';
+        showModal('apiKey', true);
     };
 
     const withLoader = async (btnId, asyncFn) => {
@@ -521,6 +541,7 @@ Example for the value of the "words" array in a response:
             id: 'msg_' + Date.now() + Math.random() 
         };
         input.value = '';
+        input.style.height = 'auto';
         
         processUserMessage(userMessage);
     };
@@ -582,13 +603,6 @@ Example for the value of the "words" array in a response:
         }
     };
 
-    const handleChatInputKeydown = (event) => {
-        if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault();
-            handleSendMessage();
-        }
-    };
-
     const handleOpenCorrection = (messageId) => {
         const char = state.characters.find(c => c.id === state.selectedCharacterId);
         const msg = char.chatHistory.find(m => m.id === messageId);
@@ -599,7 +613,7 @@ Example for the value of the "words" array in a response:
         DOMElements.correctionContent.innerHTML = `
             <div class="mb-4">
                 <p class="font-semibold text-slate-600">Your Message:</p>
-                <p class="p-3 bg-slate-100 rounded-md italic">"${msg.text}"</p>
+                <p class="p-3 bg-slate-100 rounded-md italic whitespace-pre-wrap">"${msg.text}"</p>
             </div>
             <div class="mb-4">
                 <p class="font-semibold text-slate-600">Feedback:</p>
@@ -611,33 +625,47 @@ Example for the value of the "words" array in a response:
              ${!isCorrect && correctedText && correctedText !== (msg.text || '') ? `
             <div>
                 <p class="font-semibold text-slate-600">Suggestion:</p>
-                <p class="p-3 bg-green-50 rounded-md text-green-800">"${correctedText}"</p>
+                <p class="p-3 bg-green-50 rounded-md text-green-800 whitespace-pre-wrap">"${correctedText}"</p>
             </div>
             ` : ''}
         `;
         showModal('correction', true);
     };
-    
-    const handleWordTooltipShow = (event) => {
-        const el = event.target;
-        const tooltip = DOMElements.wordTooltip;
-        tooltip.innerHTML = `
-            <div class="text-center">
-                <div class="font-bold text-lg">${el.dataset.word}</div>
-                <div class="text-sm text-amber-500 mb-1">${el.dataset.reading}</div>
-                <div class="text-xs text-slate-600">${el.dataset.meaning}</div>
-            </div>
-        `;
-        
-        const rect = el.getBoundingClientRect();
-        tooltip.style.left = `${rect.left + rect.width / 2}px`;
-        tooltip.style.top = `${rect.top}px`;
-        tooltip.style.transform = 'translate(-50%, -100%) translateY(-8px)';
-        tooltip.classList.remove('tooltip');
+
+    const hideWordTooltip = () => {
+        if (state.activeTooltipTarget) {
+            DOMElements.wordTooltip.classList.add('hidden');
+            state.activeTooltipTarget = null;
+        }
     };
 
-    const handleWordTooltipHide = () => {
-        DOMElements.wordTooltip.classList.add('tooltip');
+    const handleWordClick = (event) => {
+        event.stopPropagation();
+        const target = event.target;
+        const tooltip = DOMElements.wordTooltip;
+        
+        const isSameTarget = target === state.activeTooltipTarget;
+
+        hideWordTooltip();
+
+        if (!isSameTarget) {
+            state.activeTooltipTarget = target;
+            
+            tooltip.innerHTML = `
+                <div class="text-center">
+                    <div class="font-bold text-3xl">${target.dataset.word}</div>
+                    <div class="text-xl text-amber-500 mb-2">${target.dataset.reading}</div>
+                    <div class="text-2xl text-slate-600">${target.dataset.meaning.replace(/\\n/g, '<br>')}</div>
+                </div>
+            `;
+            
+            const rect = target.getBoundingClientRect();
+            tooltip.style.left = `${rect.left + rect.width / 2}px`;
+            tooltip.style.top = `${rect.top}px`;
+            tooltip.style.transform = 'translate(-50%, -100%) translateY(-8px)';
+            
+            tooltip.classList.remove('hidden');
+        }
     };
 
     const handleImport = (event) => {
@@ -700,6 +728,12 @@ Example for the value of the "words" array in a response:
             const isHidden = detailsContainer.classList.contains('hidden');
             detailsContainer.classList.toggle('hidden');
             document.getElementById('toggle-error-details-btn').textContent = isHidden ? 'Hide Details' : 'Show Details';
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!event.target.closest('.has-tooltip') && !event.target.closest('#word-tooltip')) {
+                hideWordTooltip();
+            }
         });
         
         if (!state.apiKey) {

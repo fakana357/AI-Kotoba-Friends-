@@ -27,15 +27,6 @@
             0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
             50% { box-shadow: 0 0 20px 10px rgba(59, 130, 246, 0); }
         }
-        .tooltip {
-            visibility: hidden;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        .has-tooltip:hover .tooltip {
-            visibility: visible;
-            opacity: 1;
-        }
         /* Custom scrollbar for chat */
         .chat-scroll::-webkit-scrollbar {
             width: 8px;
@@ -49,6 +40,9 @@
         }
         .chat-scroll::-webkit-scrollbar-thumb:hover {
             background: #64748b;
+        }
+        #chat-input {
+            max-height: 120px;
         }
     </style>
 </head>
@@ -84,10 +78,10 @@
     <!-- ===== Modals ===== -->
     <div id="modal-api-key" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center hidden z-50">
         <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md m-4">
-            <h2 class="text-2xl font-bold mb-4">Welcome to Kotoba Friends!</h2>
-            <p class="text-slate-600 mb-6">Please enter your Google Gemini API Key to begin. You can get one from Google AI Studio.</p>
+            <h2 class="text-2xl font-bold mb-4">Google Gemini API Key</h2>
+            <p class="text-slate-600 mb-6">Please enter your API Key to use the app. You can get one from Google AI Studio.</p>
             <input id="api-key-input" type="password" class="w-full p-2 border border-slate-300 rounded-md mb-4 bg-white" placeholder="Enter your API Key...">
-            <button id="save-api-key-btn" class="w-full bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600 transition">Save and Start</button>
+            <button id="save-api-key-btn" class="w-full bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600 transition">Save Key</button>
         </div>
     </div>
 
@@ -122,7 +116,7 @@
         </div>
     </div>
     
-    <div id="word-tooltip" class="absolute bg-white text-slate-800 border border-slate-200 shadow-md text-sm rounded-md px-3 py-2 z-50 pointer-events-none tooltip"></div>
+    <div id="word-tooltip" class="absolute bg-white text-slate-800 border border-slate-200 shadow-lg rounded-lg px-4 py-3 z-50 pointer-events-auto hidden max-w-sm"></div>
 
     <!-- ===== JavaScript Application Logic ===== -->
     <script type="module" src="index.js"></script>
